@@ -1,0 +1,238 @@
+<!doctype html>
+
+<html>
+<head>
+  <title>KintoreCounter</title>
+  <script src="lib/leap-0.6.4.js"></script>
+  <script src="lib/leap-plugins-0.1.6.js"></script>
+  <script src="lib/three.js"></script>
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+  <script src="lib/leaptrainer.min.js"></script>
+
+  <style>
+    	
+      body { margin: 0px; overflow: hidden; font-family: calibri; background: #E9F7FC; }
+
+      #counter {display: block; width: 200px; height: 100px; font-size: 80px; line-height: 100px; text-align: center; position: absolute; top: 150px; left: 850px; cursor: pointer;}
+    
+    </style>
+
+</head>
+<body>
+
+  <a id="counter">0</a>
+
+</body>
+
+<script>
+  $(function() {
+
+  var count = 0;
+
+  function grap (evt) {
+  count++;
+  $('#counter').text(count);
+  }
+
+  var trainer = new LeapTrainer.Controller(); 
+
+  trainer.fromJSON('{"name":"GRAP","pose":false,"data":[[{"x":0.40413909247050395,"y":0.06861600181762714,"z":0.13256118296707928,"stroke":1},{"x":0.34559469174763524,"y":-0.006690720024127066,"z":-0.20403065179836508,"stroke":1},{"x":0.18486806359522867,"y":-0.018816298463754197,"z":0.020703277788727853,"stroke":1},{"x":-0.22886743223707262,"y":0.025338977212984864,"z":0.12986656417308104,"stroke":1},{"x":-0.4499707823986354,"y":-0.018665757509178593,"z":-0.1628277780142089,"stroke":1},{"x":-0.037245531222976413,"y":0.006773364295382486,"z":0.04983438209744348,"stroke":1},{"x":0.17635074540788376,"y":0.0060840070057944645,"z":0.10359704814846524,"stroke":1},{"x":0.5487357426548596,"y":-0.06300159833477856,"z":-0.10128824385081675,"stroke":1},{"x":-0.06666889267264309,"y":0.01966755265093921,"z":0.08023208577859495,"stroke":1},{"x":-0.15637977528693148,"y":-0.010706968929682453,"z":-0.029417393025262417,"stroke":1},{"x":-0.425133694285377,"y":-0.04808883410579304,"z":-0.02279816814077304,"stroke":1},{"x":0.24759422381926177,"y":0.04879647278997046,"z":0.10166764193557107,"stroke":1},{"x":0.2395736614869729,"y":0.017050442043863384,"z":-0.14948662538926727,"stroke":1},{"x":0.26294737065538787,"y":-0.021876700273990766,"z":-0.012325358671980313,"stroke":1},{"x":-0.31090033995320165,"y":0.0431934444479852,"z":0.1377506090944766,"stroke":1},{"x":-0.42904381276540465,"y":-0.011914308226716415,"z":-0.17229256226416673,"stroke":1},{"x":-0.05825438165224178,"y":0.012741172209097457,"z":0.039719252238058805,"stroke":1},{"x":0.20392530798188768,"y":-0.007334139562237073,"z":0.07584303667872219,"stroke":1},{"x":-0.4512642573451404,"y":-0.04116610904338651,"z":-0.017308299745380312,"stroke":1}]]}');
+
+  trainer.on('GRAP', grap);
+
+});
+</script>
+
+<script>
+
+  var colors = [0xff0000, 0x00ff00, 0x0000ff];
+  var baseBoneRotation = (new THREE.Quaternion).setFromEuler(
+      new THREE.Euler(Math.PI / 2, 0, 0)
+  );
+
+  Leap.loop({background: true}, {
+    hand: function (hand) {
+
+      hand.fingers.forEach(function (finger) {
+
+        // This is the meat of the example - Positioning `the cylinders on every frame:
+        finger.data('boneMeshes').forEach(function(mesh, i){
+          var bone = finger.bones[i];
+
+          mesh.position.fromArray(bone.center());
+
+          mesh.setRotationFromMatrix(
+            (new THREE.Matrix4).fromArray( bone.matrix() )
+          );
+
+          mesh.quaternion.multiply(baseBoneRotation);
+        });
+
+        finger.data('jointMeshes').forEach(function(mesh, i){
+          var bone = finger.bones[i];
+
+          if (bone) {
+            mesh.position.fromArray(bone.prevJoint);
+          }else{
+            // special case for the finger tip joint sphere:
+            bone = finger.bones[i-1];
+            mesh.position.fromArray(bone.nextJoint);
+          }
+
+        });
+
+      });
+
+      var armMesh = hand.data('armMesh');
+
+      armMesh.position.fromArray(hand.arm.center());
+
+      armMesh.setRotationFromMatrix(
+        (new THREE.Matrix4).fromArray( hand.arm.matrix() )
+      );
+
+      armMesh.quaternion.multiply(baseBoneRotation);
+
+      armMesh.scale.x = hand.arm.width / 2;
+      armMesh.scale.z = hand.arm.width / 4;
+
+    renderer.render(scene, camera);
+
+  }})
+    // these two LeapJS plugins, handHold and handEntry are available from leapjs-plugins, included above.
+    // handHold provides hand.data
+    // handEntry provides handFound/handLost events.
+  .use('handHold')
+  .use('handEntry')
+  .on('handFound', function(hand){
+
+    hand.fingers.forEach(function (finger) {
+
+      var boneMeshes = [];
+      var jointMeshes = [];
+
+      finger.bones.forEach(function(bone) {
+
+        // create joints
+
+        // CylinderGeometry(radiusTop, radiusBottom, height, radiusSegments, heightSegments, openEnded)
+        var boneMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(5, 5, bone.length),
+            new THREE.MeshPhongMaterial()
+        );
+
+        boneMesh.material.color.setHex(0xffffff);
+        scene.add(boneMesh);
+        boneMeshes.push(boneMesh);
+      });
+
+      for (var i = 0; i < finger.bones.length + 1; i++) {
+
+        var jointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(8),
+            new THREE.MeshPhongMaterial()
+        );
+
+        jointMesh.material.color.setHex(0x0088ce);
+        scene.add(jointMesh);
+        jointMeshes.push(jointMesh);
+
+      }
+
+
+      finger.data('boneMeshes', boneMeshes);
+      finger.data('jointMeshes', jointMeshes);
+
+    });
+
+    if (hand.arm){ // 2.0.3+ have arm api,
+      // CylinderGeometry(radiusTop, radiusBottom, height, radiusSegments, heightSegments, openEnded)
+      var armMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(1, 1, hand.arm.length, 64),
+        new THREE.MeshPhongMaterial()
+      );
+
+      armMesh.material.color.setHex(0xffffff);
+
+      scene.add(armMesh);
+
+      hand.data('armMesh', armMesh);
+
+    }
+
+  })
+  .on('handLost', function(hand){
+
+    hand.fingers.forEach(function (finger) {
+
+      var boneMeshes = finger.data('boneMeshes');
+      var jointMeshes = finger.data('jointMeshes');
+
+      boneMeshes.forEach(function(mesh){
+        scene.remove(mesh);
+      });
+
+      jointMeshes.forEach(function(mesh){
+        scene.remove(mesh);
+      });
+
+      finger.data({
+        boneMeshes: null,
+        boneMeshes: null
+      });
+
+    });
+
+    var armMesh = hand.data('armMesh');
+    scene.remove(armMesh);
+    hand.data('armMesh', null);
+
+    renderer.render(scene, camera);
+
+  })
+  .connect();
+
+
+  // all units in mm
+  var initScene = function () {
+    window.scene = new THREE.Scene();
+    window.renderer = new THREE.WebGLRenderer({
+      alpha: true
+    });
+
+    window.renderer.setClearColor(0x000000, 0);
+    window.renderer.setSize(window.innerWidth, window.innerHeight);
+
+    window.renderer.domElement.style.position = 'fixed';
+    window.renderer.domElement.style.top = 0;
+    window.renderer.domElement.style.left = 0;
+    window.renderer.domElement.style.width = '100%';
+    window.renderer.domElement.style.height = '100%';
+
+    document.body.appendChild(window.renderer.domElement);
+
+    var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+    directionalLight.position.set( 0, 0.5, 1 );
+    window.scene.add(directionalLight);
+
+    window.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+    window.camera.position.fromArray([0, 100, 500]);
+    window.camera.lookAt(new THREE.Vector3(0, 160, 0));
+
+    window.addEventListener('resize', function () {
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.render(scene, camera);
+
+    }, false);
+
+    scene.add(camera);
+
+  };
+
+  initScene();
+
+</script>
+</html>
